@@ -1,0 +1,21 @@
+# Maintainer: openOODA-tools <ops@openooda.org>
+pkgname=oocsplt-bin
+_pkgname=oocsplt
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Splits files into context-determined sections matched by regex patterns."
+arch=('x86_64')
+url="https://github.com/openOODA-tools/oocsplt"
+license=('Apache-2.0')
+depends=('glibc')
+provides=('oocsplt')
+conflicts=('oocsplt')
+source_x86_64=("${url}/releases/download/v${pkgver}/oocsplt-linux-x86_64"
+               "uninstall.sh::https://raw.githubusercontent.com/openOODA-tools/${_pkgname}/v${pkgver}/uninstall.sh")
+sha256sums_x86_64=('SKIP'
+                   'SKIP')
+
+package() {
+    install -Dm755 "${srcdir}/oocsplt-linux-x86_64" "${pkgdir}/usr/bin/oocsplt"
+    install -Dm755 uninstall.sh "${pkgdir}/usr/bin/oocsplt-uninstall"
+}
