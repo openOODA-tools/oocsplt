@@ -1,0 +1,119 @@
+// # oocsplt CLI Options Parser
+//
+// Logline: Argument parser mapping POSIX csplit CLI switches and patterns to SplitConfig records.
+//
+// Setup: Parses raw command-line argument lists into structured operational specifications.
+//
+// Beats:
+//   1. Declare ParsedSplit container holding SplitConfig and command flags.
+//   2. Process prefix, digit width, quiet mode, and empty file elision switches.
+//   3. Separate input file argument from context split pattern list.
+//   4. Deliver standard usage help text.
+
+import "core/split_types.oo";
+import "core/pattern_parser.oo";
+
+type ParsedSplit = struct {
+    config: SplitConfig,
+    show_help: Bool,
+    show_version: Bool,
+    run_mcp: Bool,
+    run_test: Bool,
+    parse_error: String
+};
+
+pub fn parse_split_args(args: List[String]) -> ParsedSplit {
+    let mut cfg: SplitConfig = default_split_config();
+    let mut show_help: Bool = false;
+    let mut show_version: Bool = false;
+    let mut run_mcp: Bool = false;
+    let mut run_test: Bool = false;
+    let mut parse_error: String = "";
+
+    let num_args: Int = list_len(args);
+    let mut i: Int = 0;
+    while i < num_args {
+        let arg: String = list_get(args, i);
+        if arg == "-h" || arg == "--help" {
+            show_help = true;
+        } else if arg == "-v" || arg == "--version" {
+            show_version = true;
+        } else if arg == "--mcp" {
+            run_mcp = true;
+        } else if arg == "--test" {
+            run_test = true;
+        } else if arg == "-f" || arg == "--prefix" {
+            if i + 1 < num_args {
+                i = i + 1;
+                cfg.prefix = list_get(args, i);
+            } else {
+                parse_error = "-f/--prefix requires a prefix string argument";
+            }
+        } else if arg == "-n" || arg == "--digits" {
+            if i + 1 < num_args {
+                i = i + 1;
+                cfg.digits = parse_int(list_get(args, i));
+            } else {
+                parse_error = "-n/--digits requires an integer argument";
+            }
+        } else if arg == "-s" || arg == "-q" || arg == "--quiet" || arg == "--silent" {
+            cfg.quiet = true;
+        } else if arg == "-z" || arg == "--elide-empty-files" {
+            cfg.elide_empty = true;
+        } else if arg == "-k" || arg == "--keep-files" {
+            cfg.keep_files = true;
+        } else if arg == "--dry-run" {
+            cfg.dry_run = true;
+        } else if arg == "-d" || arg == "--demo" {
+            cfg.demo_mode = true;
+        } else if arg == "-j" || arg == "--json" {
+            cfg.json_output = true;
+        } else if arg == "--theme" {
+            if i + 1 < num_args {
+                i = i + 1;
+                cfg.theme = list_get(args, i);
+            }
+        } else if str_starts_with(arg, "-") && arg != "-" {
+            parse_error = "Unknown option: " + arg;
+        } else if chars_len(cfg.input_file) == 0 {
+            cfg.input_file = arg;
+        } else {
+            cfg.patterns = list_push(cfg.patterns, arg);
+        }
+        i = i + 1;
+    }
+
+    return ParsedSplit {
+        config: cfg,
+        show_help: show_help,
+        show_version: show_version,
+        run_mcp: run_mcp,
+        run_test: run_test,
+        parse_error: parse_error
+    };
+}
+
+pub fn render_split_help() -> String {
+    let mut out: String = "Usage: oocsplt [OPTIONS] FILE PATTERN...\n\n";
+    out = out + "Splits files into context-determined sections matched by regex patterns or line numbers.\n\n";
+    out = out + "Options:\n";
+    out = out + "  -f, --prefix <PREFIX>    Use PREFIX instead of 'xx' for chunk filenames (default: 'xx')\n";
+    out = out + "  -n, --digits <DIGITS>    Use DIGITS digits instead of 2 for chunk suffixes (default: 2)\n";
+    out = out + "  -s, -q, --quiet          Do not print counts of output file sizes\n";
+    out = out + "  -z, --elide-empty-files  Remove empty output files\n";
+    out = out + "  -k, --keep-files         Do not remove output files on errors\n";
+    out = out + "      --dry-run            Simulate split operations without writing files to disk\n";
+    out = out + "  -d, --demo               Showcase context splitting on synthetic multi-chapter document\n";
+    out = out + "  -j, --json               Output structured JSON summary and chunk metadata\n";
+    out = out + "      --theme <THEME>      Select terminal color theme (ember, ocean, matrix, cyber, monochrome)\n";
+    out = out + "      --mcp                Run streaming MCP JSON-RPC 2.0 server on stdio\n";
+    out = out + "  -h, --help               Show this help message and exit\n";
+    out = out + "  -v, --version            Show version information and exit\n\n";
+    out = out + "Pattern Syntax:\n";
+    out = out + "  INTEGER                  Split up to, but not including, line number INTEGER\n";
+    out = out + "  /REGEXP/[OFFSET]         Split up to matching line, with optional +/- line offset\n";
+    out = out + "  %REGEXP%[OFFSET]         Skip up to matching line without outputting section\n";
+    out = out + "  {INTEGER}                Repeat previous pattern specified number of times\n";
+    out = out + "  {*}                      Repeat previous pattern as many times as possible\n";
+    return out;
+}

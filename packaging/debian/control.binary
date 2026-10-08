@@ -1,0 +1,11 @@
+Package: oocsplt
+Version: 0.2.0-1
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: openOODA-tools <ops@openooda.org>
+Depends: libc6
+Description: Sovereign CONTEXT SPLITTER in pure openOODA
+ Splits files into context-determined sections matched by regex patterns.
+ Capability-bounded openOODA utility with zero ambient authority,
+ oote theme palettes, and native Model Context Protocol (MCP) surface.

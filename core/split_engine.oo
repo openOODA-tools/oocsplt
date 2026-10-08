@@ -1,0 +1,205 @@
+// # oocsplt Split Execution Engine
+//
+// Logline: Processes text streams and applies context patterns to extract and write contiguous file sections.
+//
+// Setup: Demands capability tokens when writing chunks to disk; pure in-memory calculation during dry-run.
+//
+// Beats:
+//   1. Partition raw input text into raw preserved-newline line buffers.
+//   2. Match line numbers, regex substrings, and offsets against line sequences.
+//   3. Extract slice ranges into SplitChunk structures with byte and line tallies.
+//   4. Optionally commit chunk buffers to filesystem using FsWriteCap.
+
+import "core/split_types.oo";
+import "core/pattern_parser.oo";
+
+pub fn split_lines_raw(text: String) -> List[String] {
+    let mut lines: List[String] = list_new();
+    let n: Int = chars_len(text);
+    if n == 0 {
+        return lines;
+    }
+    let mut start: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if byte_at(text, i) == 10 {
+            lines = list_push(lines, str_slice(text, start, i + 1));
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    if start < n {
+        lines = list_push(lines, str_slice(text, start, n));
+    }
+    return lines;
+}
+
+fn line_matches_pattern(line: String, pat: String) -> Bool {
+    let pat_len: Int = chars_len(pat);
+    if pat_len == 0 {
+        return false;
+    }
+    if byte_at(pat, 0) == 94 {
+        // Starts with '^'
+        let rest: String = str_slice(pat, 1, pat_len);
+        return str_starts_with(line, rest);
+    }
+    return str_contains(line, pat);
+}
+
+fn find_next_match(lines: List[String], from_idx: Int, pat: String) -> Int {
+    let n: Int = list_len(lines);
+    let mut i: Int = from_idx;
+    while i < n {
+        let line: String = list_get(lines, i);
+        if line_matches_pattern(line, pat) {
+            return i;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn concat_lines_range(lines: List[String], from_idx: Int, to_idx: Int) -> String {
+    let mut buf: String = "";
+    let mut i: Int = from_idx;
+    while i < to_idx {
+        buf = buf + list_get(lines, i);
+        i = i + 1;
+    }
+    return buf;
+}
+
+pub fn execute_split(
+    text: String,
+    patterns: List[SplitPattern],
+    cfg: SplitConfig
+) -> SplitResult {
+    let lines: List[String] = split_lines_raw(text);
+    let num_lines: Int = list_len(lines);
+    let mut chunks: List[SplitChunk] = list_new();
+
+    let mut cur_idx: Int = 0;
+    let mut chunk_idx: Int = 0;
+    let num_pats: Int = list_len(patterns);
+    let mut pat_i: Int = 0;
+
+    while pat_i < num_pats && cur_idx < num_lines {
+        let pat: SplitPattern = list_get(patterns, pat_i);
+        let mut rep_left: Int = pat.repeat;
+        let mut keep_matching: Bool = true;
+        let mut search_from: Int = cur_idx;
+
+        while keep_matching && cur_idx < num_lines {
+            let mut target_idx: Int = -1;
+            if pat.kind == "line" {
+                target_idx = pat.line_num - 1;
+                keep_matching = false;
+            } else {
+                let m: Int = find_next_match(lines, search_from, pat.text);
+                if m >= 0 {
+                    target_idx = m + pat.offset;
+                    search_from = m + 1;
+                    if search_from <= target_idx {
+                        search_from = target_idx + 1;
+                    }
+                } else {
+                    keep_matching = false;
+                }
+            }
+
+            if target_idx >= 0 {
+                if target_idx < cur_idx {
+                    target_idx = cur_idx;
+                }
+                if target_idx > num_lines {
+                    target_idx = num_lines;
+                }
+
+                if !pat.is_skip {
+                    let content: String = concat_lines_range(lines, cur_idx, target_idx);
+                    let bcnt: Int = chars_len(content);
+                    let lcnt: Int = target_idx - cur_idx;
+                    if !cfg.elide_empty || bcnt > 0 {
+                        let fname: String = format_chunk_filename(cfg.prefix, cfg.digits, chunk_idx);
+                        chunks = list_push(chunks, SplitChunk {
+                            index: chunk_idx,
+                            filename: fname,
+                            start_line: cur_idx + 1,
+                            end_line: target_idx,
+                            byte_count: bcnt,
+                            line_count: lcnt,
+                            content: content
+                        });
+                        chunk_idx = chunk_idx + 1;
+                    }
+                }
+                cur_idx = target_idx;
+                if search_from <= cur_idx {
+                    search_from = cur_idx + 1;
+                }
+
+                if rep_left > 0 {
+                    rep_left = rep_left - 1;
+                    if rep_left == 0 {
+                        keep_matching = false;
+                    }
+                }
+            }
+        }
+        pat_i = pat_i + 1;
+    }
+
+    // Capture trailing chunk
+    if cur_idx < num_lines {
+        let content: String = concat_lines_range(lines, cur_idx, num_lines);
+        let bcnt: Int = chars_len(content);
+        let lcnt: Int = num_lines - cur_idx;
+        if !cfg.elide_empty || bcnt > 0 {
+            let fname: String = format_chunk_filename(cfg.prefix, cfg.digits, chunk_idx);
+            chunks = list_push(chunks, SplitChunk {
+                index: chunk_idx,
+                filename: fname,
+                start_line: cur_idx + 1,
+                end_line: num_lines,
+                byte_count: bcnt,
+                line_count: lcnt,
+                content: content
+            });
+        }
+    }
+
+    let mut tot_bytes: Int = 0;
+    let nchunks: Int = list_len(chunks);
+    let mut ci: Int = 0;
+    while ci < nchunks {
+        let c: SplitChunk = list_get(chunks, ci);
+        tot_bytes = tot_bytes + c.byte_count;
+        ci = ci + 1;
+    }
+
+    return SplitResult {
+        chunks: chunks,
+        total_bytes: tot_bytes,
+        total_lines: num_lines,
+        success: true,
+        error_msg: ""
+    };
+}
+
+pub fn commit_chunks_to_disk(
+    fw: &FsWriteCap,
+    chunks: List[SplitChunk]
+) -> Result[Int, String] {
+    let n: Int = list_len(chunks);
+    let mut i: Int = 0;
+    while i < n {
+        let c: SplitChunk = list_get(chunks, i);
+        let r: Result[Bool, String] = write_file(fw, c.filename, c.content);
+        if !r.is_ok() {
+            return Err("Failed to write output chunk: " + c.filename);
+        }
+        i = i + 1;
+    }
+    return Ok(n);
+}

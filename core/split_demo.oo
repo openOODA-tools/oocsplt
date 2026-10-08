@@ -1,0 +1,54 @@
+// # oocsplt Split Demo Showcase
+//
+// Logline: Generates synthetic multi-section markdown documents and pattern fixtures for demo verification.
+//
+// Setup: Pure string generation producing structured chapter documents and test vectors.
+//
+// Beats:
+//   1. Construct synthetic multi-section document with distinct headers and content.
+//   2. Configure repeatable pattern specifications for context splitting.
+//   3. Execute demo split pass producing verified SplitResult model.
+//   4. Export demo configuration and document fixtures.
+
+import "core/split_types.oo";
+import "core/pattern_parser.oo";
+import "core/split_engine.oo";
+
+pub fn build_demo_document() -> String {
+    let mut doc: String = "# Preface\n";
+    doc = doc + "This is the openOODA context splitter demo document.\n";
+    doc = doc + "It demonstrates splitting by regex delimiters and line bounds.\n\n";
+    doc = doc + "# Chapter 1: Foundations\n";
+    doc = doc + "Memory safety, pure capability tokens, and zero ambient authority.\n";
+    doc = doc + "Every operation must be explicitly authorized by capabilities.\n\n";
+    doc = doc + "# Chapter 2: The Compiler\n";
+    doc = doc + "The oodac compiler compiles native code with negative trust validation.\n";
+    doc = doc + "Every page holds strictly between 16 and 256 lines.\n\n";
+    doc = doc + "# Chapter 3: Distribution\n";
+    doc = doc + "Packaged for Arch Linux, Fedora RPM, and Debian DEB systems.\n";
+    doc = doc + "Equipped with companion clean uninstallation scripts.\n";
+    return doc;
+}
+
+pub fn build_demo_patterns() -> List[SplitPattern] {
+    let mut tokens: List[String] = list_new();
+    tokens = list_push(tokens, "/^# Chapter/");
+    tokens = list_push(tokens, "{*}");
+    return parse_pattern_list(tokens);
+}
+
+pub fn build_demo_config() -> SplitConfig {
+    let mut cfg: SplitConfig = default_split_config();
+    cfg.prefix = "demo_chunk_";
+    cfg.digits = 2;
+    cfg.dry_run = true;
+    cfg.demo_mode = true;
+    return cfg;
+}
+
+pub fn build_demo_result() -> SplitResult {
+    let doc: String = build_demo_document();
+    let pats: List[SplitPattern] = build_demo_patterns();
+    let cfg: SplitConfig = build_demo_config();
+    return execute_split(doc, pats, cfg);
+}

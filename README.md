@@ -1,18 +1,18 @@
-# oocsplt: Sovereign CONTEXT SPLITTER
+# oocsplt: Sovereign Context Splitter & Stream Partitioner
 
 <div align="center">
 
 ```
 ================================================================================
                                 oocsplt
-               Sovereign openOODA CONTEXT SPLITTER
+              Sovereign openOODA Context Splitter
 ================================================================================
 ```
 
-**Sovereign CONTEXT SPLITTER**  
-*Splits files into context-determined sections matched by regex patterns.*  
-*Two Faces, One Engine:* Modern terminal ergonomics for humans • Zero-leakage MCP for AI agents  
-Written in 100% pure [openOODA](https://github.com/openOODA).
+**Sovereign Context Splitter & Stream Partitioner**  
+*POSIX-compliant csplit alternative splitting streams into context-determined sections matched by regex patterns or line markers.*  
+*Two Faces, One Engine:* Modern terminal ergonomics for humans • Streaming MCP stdio for AI agents  
+Written in 100% pure native [openOODA](https://github.com/openOODA).
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![openOODA](https://img.shields.io/badge/openOODA-1.0-emerald.svg)](https://openooda.org)
@@ -54,32 +54,52 @@ oocsplt-uninstall
 ## 2. CLI Usage
 
 ```
-usage: oocsplt [options] [ARGUMENTS]...
+Usage: oocsplt [OPTIONS] FILE PATTERN...
 
-Splits files into context-determined sections matched by regex patterns.
+Splits files into context-determined sections matched by regex patterns or line numbers.
 
 Options:
-  -h, --help           display this help and exit
-  -v, --version        output version information and exit
-      --json           output formatted as JSON Lines
-      --color <WHEN>   colorize output: auto, always, never [default: auto]
-      --theme <NAME>   override active oote palette
-      --mcp            run as Model Context Protocol stdio server
+  -f, --prefix <PREFIX>    Use PREFIX instead of 'xx' for chunk filenames (default: 'xx')
+  -n, --digits <DIGITS>    Use DIGITS digits instead of 2 for chunk suffixes (default: 2)
+  -s, -q, --quiet          Do not print counts of output file sizes
+  -z, --elide-empty-files  Remove empty output files
+  -k, --keep-files         Do not remove output files on errors
+      --dry-run            Simulate split operations without writing files to disk
+  -d, --demo               Showcase context splitting on synthetic multi-chapter document
+  -j, --json               Output structured JSON summary and chunk metadata
+      --theme <THEME>      Select terminal color theme (ember, ocean, matrix, cyber, monochrome)
+      --mcp                Run streaming MCP JSON-RPC 2.0 server on stdio
+  -h, --help               Show this help message and exit
+  -v, --version            Show version information and exit
+
+Pattern Syntax:
+  INTEGER                  Split up to, but not including, line number INTEGER
+  /REGEXP/[OFFSET]         Split up to matching line, with optional +/- line offset
+  %REGEXP%[OFFSET]         Skip up to matching line without outputting section
+  {INTEGER}                Repeat previous pattern specified number of times
+  {*}                      Repeat previous pattern as many times as possible
 ```
 
 ---
 
-## 3. Theming Integration (`oote`)
+## 3. Pattern Matching & Section Slicing
 
-`oocsplt` synchronizes visual styles and status colors with [oote](https://github.com/openOODA-tools/oote):
-* **Configuration:** Reads active palette from `~/.openooda/theme.oot`.
-* **Environment Overrides:** Respects `$OODA_THEME` and `$NO_COLOR`.
+* **Line Index Markers**: `oocsplt input.txt 10 20 30` partitions lines `1..9`, `10..19`, and `20..29`.
+* **Context Delimiters**: `oocsplt doc.md '/^# Chapter/' '{*}'` splits at each chapter heading repeatedly until end of file.
+* **Skip Delimiters**: `%SKIP%` discards preceding text sections while preserving subsequent matching slices.
+* **Zero Ambient Authority**: File writing is bounded strictly through `&FsWriteCap` with dry-run verification mode.
 
 ---
 
 ## 4. Model Context Protocol (MCP)
 
-When invoked with `--mcp`, `oocsplt` runs a JSON-RPC 2.0 stdio server providing structured tools for AI coding agents:
+When invoked with `--mcp`, `oocsplt` runs a JSON-RPC 2.0 stdio server providing five sovereign splitting tools:
+
+* `csplt_split`: Split input file or string content by pattern list or line numbers.
+* `csplt_preview`: Preview split boundaries without writing to disk.
+* `csplt_by_lines`: Split text into sections at specified line numbers.
+* `csplt_by_pattern`: Split text into sections matching a delimiter pattern.
+* `csplt_demo`: Return synthetic multi-chapter context splitting showcase.
 
 ```bash
 oocsplt --mcp
@@ -89,9 +109,9 @@ oocsplt --mcp
 
 ## 5. Security & Zero Ambient Authority
 
-* **Pure Capability Bounded:** Operates strictly with explicit tokens (&FsReadCap, &TermCap, &McpCap). Physical absence of ambient disk/net leakage.
-* **Negative-Trust Architecture:** Strict input validation and operational limits.
-* **Hermetic Binary:** Standalone zero-dependency executable.
+* **Pure Capability Bounded**: Operates strictly with explicit tokens (`&FsReadCap`, `&FsWriteCap`, `&ProcessCap`, `&EnvCap`). Physical absence of ambient disk or network authority.
+* **Negative-Trust Architecture**: Complete pattern grammar validation, bounds clamping, and memory-safe line slicing.
+* **Hermetic Binary**: Standalone zero-dependency executable compiled via `oodac`.
 
 ---
 

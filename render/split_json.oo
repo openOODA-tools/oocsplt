@@ -1,0 +1,88 @@
+// # oocsplt JSON Serialization Subsystem
+//
+// Logline: Serializes split chunk definitions, operational summaries, and demo telemetry to JSON format.
+//
+// Setup: Pure string manipulation routines formatting structured JSON without external dependencies.
+//
+// Beats:
+//   1. Escape strings for valid JSON field representation.
+//   2. Serialize SplitChunk records into JSON objects.
+//   3. Serialize aggregate SplitResult containers into JSON arrays and objects.
+//   4. Deliver complete demo suite JSON payloads.
+
+import "core/split_types.oo";
+
+fn escape_str(s: String) -> String {
+    let mut out: String = "";
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    while i < n {
+        let ch: Int = byte_at(s, i);
+        if ch == 34 {
+            out = out + "\\\"";
+        } else if ch == 92 {
+            out = out + "\\\\";
+        } else if ch == 10 {
+            out = out + "\\n";
+        } else if ch == 13 {
+            out = out + "\\r";
+        } else if ch == 9 {
+            out = out + "\\t";
+        } else {
+            out = out + str_slice(s, i, i + 1);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn chunk_to_json(c: SplitChunk) -> String {
+    let mut out: String = "{\n";
+    out = out + "  \"index\": " + to_string(c.index) + ",\n";
+    out = out + "  \"filename\": \"" + escape_str(c.filename) + "\",\n";
+    out = out + "  \"start_line\": " + to_string(c.start_line) + ",\n";
+    out = out + "  \"end_line\": " + to_string(c.end_line) + ",\n";
+    out = out + "  \"byte_count\": " + to_string(c.byte_count) + ",\n";
+    out = out + "  \"line_count\": " + to_string(c.line_count) + ",\n";
+    out = out + "  \"content\": \"" + escape_str(c.content) + "\"\n";
+    out = out + "}";
+    return out;
+}
+
+pub fn result_to_json(res: SplitResult) -> String {
+    let mut out: String = "{\n";
+    out = out + "  \"tool\": \"oocsplt\",\n";
+    out = out + "  \"version\": \"0.2.0\",\n";
+    out = out + "  \"success\": " + (if res.success { "true" } else { "false" }) + ",\n";
+    out = out + "  \"total_bytes\": " + to_string(res.total_bytes) + ",\n";
+    out = out + "  \"total_lines\": " + to_string(res.total_lines) + ",\n";
+    out = out + "  \"chunks_count\": " + to_string(list_len(res.chunks)) + ",\n";
+    out = out + "  \"chunks\": [\n";
+
+    let n: Int = list_len(res.chunks);
+    let mut i: Int = 0;
+    while i < n {
+        let c: SplitChunk = list_get(res.chunks, i);
+        out = out + "    {\n";
+        out = out + "      \"index\": " + to_string(c.index) + ",\n";
+        out = out + "      \"filename\": \"" + escape_str(c.filename) + "\",\n";
+        out = out + "      \"start_line\": " + to_string(c.start_line) + ",\n";
+        out = out + "      \"end_line\": " + to_string(c.end_line) + ",\n";
+        out = out + "      \"byte_count\": " + to_string(c.byte_count) + ",\n";
+        out = out + "      \"line_count\": " + to_string(c.line_count) + "\n";
+        out = out + "    }";
+        if i + 1 < n {
+            out = out + ",";
+        }
+        out = out + "\n";
+        i = i + 1;
+    }
+
+    out = out + "  ]\n";
+    out = out + "}";
+    return out;
+}
+
+pub fn demo_to_json(res: SplitResult) -> String {
+    return result_to_json(res);
+}

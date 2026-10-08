@@ -4,7 +4,7 @@
 # "Removes oocsplt binary, package installations, and cache."
 #
 # Usage:
-#   curl -fsSL https://openooda-toocsplt.github.io/oocsplt/uninstall.sh | bash
+#   curl -fsSL https://openooda-tools.github.io/oocsplt/uninstall.sh | bash
 #   or: ./uninstall.sh [options]
 #
 # Options:

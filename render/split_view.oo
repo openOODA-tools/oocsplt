@@ -1,0 +1,61 @@
+// # oocsplt Terminal View Renderer
+//
+// Logline: Formats extracted chunk sections, byte count tallies, and demo showcases for terminal output.
+//
+// Setup: Bridges SplitResult and SplitChunk models to human-readable streams with themed styling.
+//
+// Beats:
+//   1. Format standard POSIX csplit byte count tallies.
+//   2. Format detailed chunk card inspection with line numbers and byte tallies.
+//   3. Format tabular summaries of split operations.
+//   4. Deliver demo conversion showcase view.
+
+import "core/split_types.oo";
+import "render/split_theme.oo";
+
+pub fn render_posix_output(res: SplitResult) -> String {
+    let mut out: String = "";
+    let n: Int = list_len(res.chunks);
+    let mut i: Int = 0;
+    while i < n {
+        let c: SplitChunk = list_get(res.chunks, i);
+        out = out + to_string(c.byte_count) + "\n";
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn render_chunk_card(c: SplitChunk, th: ThemePalette) -> String {
+    let mut out: String = "";
+    out = out + th.bold + th.secondary + "--- [Chunk: " + c.filename + "] ---" + th.reset + "\n";
+    out = out + "  Lines: " + th.accent + to_string(c.start_line) + ".." + to_string(c.end_line)
+        + th.reset + " (" + to_string(c.line_count) + " lines)"
+        + "  Bytes: " + th.success + to_string(c.byte_count) + th.reset + "\n";
+    out = out + th.dim + c.content + th.reset + "\n";
+    return out;
+}
+
+pub fn render_split_summary(res: SplitResult, th: ThemePalette) -> String {
+    let mut out: String = "\n" + th.bold + th.primary
+        + "=== oocsplt Split Summary ===" + th.reset + "\n";
+    out = out + "Extracted Chunks: " + th.accent + to_string(list_len(res.chunks))
+        + th.reset + "  Total Bytes: " + th.success + to_string(res.total_bytes)
+        + th.reset + "  Total Lines: " + to_string(res.total_lines) + "\n\n";
+
+    let n: Int = list_len(res.chunks);
+    let mut i: Int = 0;
+    while i < n {
+        let c: SplitChunk = list_get(res.chunks, i);
+        out = out + render_chunk_card(c, th);
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn render_demo_view(res: SplitResult, th: ThemePalette) -> String {
+    let mut out: String = "\n" + th.bold + th.primary
+        + "=== Sovereign openOODA Context Splitter (oocsplt) Showcase ===" + th.reset + "\n";
+    out = out + "Demonstrating splitting multi-chapter document with pattern: /^# Chapter/ {*}\n";
+    out = out + render_split_summary(res, th);
+    return out;
+}

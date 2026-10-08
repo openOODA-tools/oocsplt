@@ -1,0 +1,127 @@
+// # oocsplt Core Subsystem Unit Tests
+//
+// Logline: Verification anchors for pattern parsing, boundary matching, and slice extraction engine.
+//
+// Setup: Executes deterministic unit tests validating pattern grammar, line bounds, and demo suites.
+//
+// Beats:
+//   1. Verify integer parsing and chunk filename formatting.
+//   2. Verify pattern list parsing with offsets, skips, and repeats.
+//   3. Verify line and delimiter-based splitting logic.
+//   4. Export unified core test harness.
+
+import "core/split_types.oo";
+import "core/pattern_parser.oo";
+import "core/split_engine.oo";
+import "core/split_demo.oo";
+
+pub fn test_pattern_parser() -> Bool {
+    if parse_int("-42") != -42 {
+        return false;
+    }
+    if parse_int("+99") != 99 {
+        return false;
+    }
+    if parse_int("128") != 128 {
+        return false;
+    }
+
+    if format_chunk_filename("xx", 2, 5) != "xx05" {
+        return false;
+    }
+    if format_chunk_filename("chunk_", 3, 12) != "chunk_012" {
+        return false;
+    }
+
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, "10");
+    toks = list_push(toks, "/HEADER/+2");
+    toks = list_push(toks, "%SKIP%");
+    toks = list_push(toks, "{3}");
+
+    let pats: List[SplitPattern] = parse_pattern_list(toks);
+    if list_len(pats) != 3 {
+        return false;
+    }
+
+    let p0: SplitPattern = list_get(pats, 0);
+    if p0.kind != "line" || p0.line_num != 10 {
+        return false;
+    }
+
+    let p1: SplitPattern = list_get(pats, 1);
+    if p1.kind != "pattern" || p1.text != "HEADER" || p1.offset != 2 {
+        return false;
+    }
+
+    let p2: SplitPattern = list_get(pats, 2);
+    if p2.kind != "skip" || p2.text != "SKIP" || p2.repeat != 3 || !p2.is_skip {
+        return false;
+    }
+
+    return true;
+}
+
+pub fn test_split_engine() -> Bool {
+    let text: String = "line 1\nline 2\nline 3\nline 4\nline 5\n";
+    let mut toks: List[String] = list_new();
+    toks = list_push(toks, "3");
+    let pats: List[SplitPattern] = parse_pattern_list(toks);
+
+    let mut cfg: SplitConfig = default_split_config();
+    cfg.dry_run = true;
+    let res: SplitResult = execute_split(text, pats, cfg);
+
+    if list_len(res.chunks) != 2 {
+        return false;
+    }
+    let c0: SplitChunk = list_get(res.chunks, 0);
+    if c0.start_line != 1 || c0.end_line != 2 || c0.content != "line 1\nline 2\n" {
+        return false;
+    }
+    let c1: SplitChunk = list_get(res.chunks, 1);
+    if c1.start_line != 3 || c1.end_line != 5 || c1.content != "line 3\nline 4\nline 5\n" {
+        return false;
+    }
+
+    // Pattern split test
+    let doc: String = "intro\n=== SECTION 1 ===\nbody 1\n=== SECTION 2 ===\nbody 2\n";
+    let mut ptoks: List[String] = list_new();
+    ptoks = list_push(ptoks, "/=== SECTION/");
+    ptoks = list_push(ptoks, "{*}");
+    let sec_pats: List[SplitPattern] = parse_pattern_list(ptoks);
+    let sec_res: SplitResult = execute_split(doc, sec_pats, cfg);
+
+    if list_len(sec_res.chunks) != 3 {
+        return false;
+    }
+
+    return true;
+}
+
+pub fn test_split_demo() -> Bool {
+    let res: SplitResult = build_demo_result();
+    if list_len(res.chunks) != 4 {
+        return false;
+    }
+    if res.total_bytes <= 0 {
+        return false;
+    }
+    if res.total_lines <= 0 {
+        return false;
+    }
+    return true;
+}
+
+pub fn run_core_tests() -> Bool {
+    if !test_pattern_parser() {
+        return false;
+    }
+    if !test_split_engine() {
+        return false;
+    }
+    if !test_split_demo() {
+        return false;
+    }
+    return true;
+}

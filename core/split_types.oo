@@ -1,0 +1,68 @@
+// # oocsplt Core Types Definition
+//
+// Logline: Data structures defining split patterns, section chunks, operational configurations, and execution results.
+//
+// Setup: Imported by pattern parser, split engine, render views, and CLI/MCP interfaces.
+//
+// Beats:
+//   1. Declare SplitPattern record capturing line numbers, regex delimiters, offsets, and repetitions.
+//   2. Declare SplitChunk representing extracted contiguous text sections with byte metrics.
+//   3. Declare SplitConfig holding CLI flags, naming prefixes, and formatting options.
+//   4. Declare SplitResult and export default configuration constructor.
+
+type SplitPattern = struct {
+    kind: String,
+    text: String,
+    line_num: Int,
+    offset: Int,
+    repeat: Int,
+    is_skip: Bool
+};
+
+type SplitChunk = struct {
+    index: Int,
+    filename: String,
+    start_line: Int,
+    end_line: Int,
+    byte_count: Int,
+    line_count: Int,
+    content: String
+};
+
+type SplitConfig = struct {
+    prefix: String,
+    digits: Int,
+    quiet: Bool,
+    elide_empty: Bool,
+    keep_files: Bool,
+    dry_run: Bool,
+    json_output: Bool,
+    demo_mode: Bool,
+    theme: String,
+    input_file: String,
+    patterns: List[String]
+};
+
+type SplitResult = struct {
+    chunks: List[SplitChunk],
+    total_bytes: Int,
+    total_lines: Int,
+    success: Bool,
+    error_msg: String
+};
+
+pub fn default_split_config() -> SplitConfig {
+    return SplitConfig {
+        prefix: "xx",
+        digits: 2,
+        quiet: false,
+        elide_empty: false,
+        keep_files: false,
+        dry_run: false,
+        json_output: false,
+        demo_mode: false,
+        theme: "default",
+        input_file: "",
+        patterns: list_new()
+    };
+}

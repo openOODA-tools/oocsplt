@@ -1,52 +1,141 @@
 // # oocsplt Main Entry Point
 //
-// Logline: Splits files into context-determined sections matched by regex patterns.
+// Logline: Sovereign context splitter and stream partitioner with dual-surface CLI and MCP stdio interfaces.
 //
-// Setup: Demands explicit capability tokens and standard argument list.
+// Setup: Demands &FsReadCap, &FsWriteCap, &ProcessCap, and &EnvCap tokens for capability-bounded file operations.
 //
 // Beats:
-//   1. Parse command-line options and dispatch --help, --version, or --mcp.
-//   2. Execute capability-bounded oocsplt operations.
-//   3. Format and output structured results to standard output.
+//   1. Parse command-line options and dispatch --help, --version, --test, or --mcp.
+//   2. Dispatch synthetic demo execution when --demo is specified.
+//   3. Read stream content from filesystem path or standard input.
+//   4. Partition text sections by line numbers or delimiter patterns and write chunks to disk.
 
-fn render_help() -> String {
-    return "oocsplt 0.1.0 (openOODA sovereign search & inspection)\n"
-        + "usage: oocsplt [options] [ARGUMENTS]...\n\n"
-        + "Splits files into context-determined sections matched by regex patterns.\n\n"
-        + "Options:\n"
-        + "  -h, --help           display this help and exit\n"
-        + "  -v, --version        output version information and exit\n"
-        + "      --json           output formatted as JSON Lines\n"
-        + "      --color <WHEN>   colorize output: auto, always, never [default: auto]\n"
-        + "      --theme <NAME>   override active oote palette\n"
-        + "      --mcp            run as Model Context Protocol stdio server\n";
-}
+import "core/split_types.oo";
+import "core/pattern_parser.oo";
+import "core/split_engine.oo";
+import "core/split_demo.oo";
+import "render/split_theme.oo";
+import "render/split_view.oo";
+import "render/split_json.oo";
+import "ipc/split_opts.oo";
+import "ipc/mcp_serve.oo";
+import "anchor.oo";
 
 fn render_version() -> String {
-    return "oocsplt 0.1.0 (openOODA sovereign search & inspection)\n";
+    return "oocsplt 0.2.0 (openOODA sovereign context splitter)\n";
 }
 
-fn main(args: List[String]) -> Int {
-    let num_args: Int = list_len(args);
-    let mut i: Int = 0;
+fn read_all_stdin(fr: &FsReadCap) -> String {
+    let mut buf: String = "";
+    let mut reading: Bool = true;
+    while reading {
+        let r: Result[String, String] = oo_read_stdin_chunk(fr, 8192);
+        if !r.is_ok() {
+            reading = false;
+        } else {
+            let chunk: String = match r { Ok(s) => s, Err(_) => "" };
+            if chars_len(chunk) == 0 {
+                reading = false;
+            } else {
+                buf = buf + chunk;
+            }
+        }
+    }
+    return buf;
+}
 
-    while i < num_args {
-        let arg: String = list_get(args, i);
-        if arg == "-h" || arg == "--help" {
-            print(render_help());
-            return 0;
-        }
-        if arg == "-v" || arg == "--version" {
-            print(render_version());
-            return 0;
-        }
-        if arg == "--mcp" {
-            print("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"ready\",\"tool\":\"oocsplt\"}}\n");
-            return 0;
-        }
-        i = i + 1;
+fn main(
+    fr: &FsReadCap,
+    fw: &FsWriteCap,
+    pr: &ProcessCap,
+    env: &EnvCap,
+    args: List[String]
+) -> Int {
+    let parsed: ParsedSplit = parse_split_args(args);
+
+    if parsed.show_help {
+        print(render_split_help());
+        return 0;
     }
 
-    print("oocsplt: sovereign capability-bounded utility ready\n");
+    if parsed.show_version {
+        print(render_version());
+        return 0;
+    }
+
+    if parsed.run_mcp {
+        run_mcp_server(fr);
+        return 0;
+    }
+
+    if parsed.run_test {
+        if !run_all_tests() {
+            print("oocsplt: internal anchor tests FAILED\n");
+            return 1;
+        }
+        print("oocsplt: internal anchor tests PASSED\n");
+        return 0;
+    }
+
+    if chars_len(parsed.parse_error) > 0 {
+        print("oocsplt: " + parsed.parse_error + "\nTry 'oocsplt --help' for more information.\n");
+        return 1;
+    }
+
+    let th: ThemePalette = get_theme(parsed.config.theme);
+
+    if parsed.config.demo_mode {
+        let res: SplitResult = build_demo_result();
+        if parsed.config.json_output {
+            print(demo_to_json(res) + "\n");
+        } else {
+            print(render_demo_view(res, th));
+        }
+        return 0;
+    }
+
+    if chars_len(parsed.config.input_file) == 0 {
+        print("oocsplt: missing operand\nTry 'oocsplt --help' or 'oocsplt --demo' for more information.\n");
+        return 1;
+    }
+
+    if list_len(parsed.config.patterns) == 0 {
+        print("oocsplt: missing pattern operand\nTry 'oocsplt --help' for more information.\n");
+        return 1;
+    }
+
+    let mut content: String = "";
+    if parsed.config.input_file == "-" {
+        content = read_all_stdin(fr);
+    } else {
+        let r: Result[String, String] = read_file(fr, parsed.config.input_file);
+        if !r.is_ok() {
+            print("oocsplt: " + parsed.config.input_file + ": No such file or directory\n");
+            return 1;
+        }
+        content = match r { Ok(v) => v, Err(_) => "" };
+    }
+
+    let pats: List[SplitPattern] = parse_pattern_list(parsed.config.patterns);
+    let res: SplitResult = execute_split(content, pats, parsed.config);
+
+    if !parsed.config.dry_run {
+        let wr: Result[Int, String] = commit_chunks_to_disk(fw, res.chunks);
+        if !wr.is_ok() {
+            print("oocsplt: error committing split chunks to disk\n");
+            return 1;
+        }
+    }
+
+    if parsed.config.json_output {
+        print(result_to_json(res) + "\n");
+    } else if !parsed.config.quiet {
+        if parsed.config.dry_run {
+            print(render_split_summary(res, th));
+        } else {
+            print(render_posix_output(res));
+        }
+    }
+
     return 0;
 }

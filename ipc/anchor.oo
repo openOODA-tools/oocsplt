@@ -1,0 +1,129 @@
+// # oocsplt IPC Subsystem Unit Tests
+//
+// Logline: Verification anchors for CLI argument processing and MCP JSON-RPC protocol handlers.
+//
+// Setup: Executes deterministic tests on JSON parsing and argument normalization.
+//
+// Beats:
+//   1. Verify JSON escaping and field extraction routines.
+//   2. Verify CLI flag mapping to SplitConfig state.
+//   3. Verify MCP initialize and tools/list protocol frames.
+//   4. Export unified IPC test harness.
+
+import "core/split_types.oo";
+import "ipc/json_field.oo";
+import "ipc/split_opts.oo";
+import "ipc/mcp_serve.oo";
+
+pub fn test_json_helpers() -> Bool {
+    let esc: String = json_escape("line1\n\"quotes\"");
+    if !str_contains(esc, "\\\"quotes\\\"") {
+        return false;
+    }
+    if !str_contains(esc, "\\n") {
+        return false;
+    }
+
+    let payload: String = "{\"pattern\":\"/Chapter/\",\"quiet\":true,\"id\":10}";
+    let pat: String = extract_json_str(payload, "pattern");
+    if pat != "/Chapter/" {
+        return false;
+    }
+    let is_quiet: Bool = extract_json_bool(payload, "quiet", false);
+    if !is_quiet {
+        return false;
+    }
+
+    return true;
+}
+
+pub fn test_cli_parsing() -> Bool {
+    let mut args: List[String] = list_push(list_new(), "-f");
+    args = list_push(args, "mychunk_");
+    args = list_push(args, "-n");
+    args = list_push(args, "3");
+    args = list_push(args, "-q");
+    args = list_push(args, "-z");
+    args = list_push(args, "--dry-run");
+    args = list_push(args, "--theme");
+    args = list_push(args, "ocean");
+    args = list_push(args, "doc.txt");
+    args = list_push(args, "/^Section/");
+    args = list_push(args, "{*}");
+
+    let parsed: ParsedSplit = parse_split_args(args);
+    if parsed.config.prefix != "mychunk_" {
+        return false;
+    }
+    if parsed.config.digits != 3 {
+        return false;
+    }
+    if !parsed.config.quiet {
+        return false;
+    }
+    if !parsed.config.elide_empty {
+        return false;
+    }
+    if !parsed.config.dry_run {
+        return false;
+    }
+    if parsed.config.theme != "ocean" {
+        return false;
+    }
+    if parsed.config.input_file != "doc.txt" {
+        return false;
+    }
+    if list_len(parsed.config.patterns) != 2 {
+        return false;
+    }
+
+    let mut demo_args: List[String] = list_push(list_new(), "--demo");
+    let parsed_demo: ParsedSplit = parse_split_args(demo_args);
+    if !parsed_demo.config.demo_mode {
+        return false;
+    }
+
+    return true;
+}
+
+pub fn test_mcp_frames() -> Bool {
+    let init_resp: String = render_mcp_init("\"split-init\"");
+    if !str_contains(init_resp, "oocsplt") {
+        return false;
+    }
+    if !str_contains(init_resp, "2024-11-05") {
+        return false;
+    }
+
+    let list_resp: String = render_mcp_tools_list("\"split-list\"");
+    if !str_contains(list_resp, "csplt_split") {
+        return false;
+    }
+    if !str_contains(list_resp, "csplt_preview") {
+        return false;
+    }
+    if !str_contains(list_resp, "csplt_by_lines") {
+        return false;
+    }
+    if !str_contains(list_resp, "csplt_by_pattern") {
+        return false;
+    }
+    if !str_contains(list_resp, "csplt_demo") {
+        return false;
+    }
+
+    return true;
+}
+
+pub fn run_ipc_tests() -> Bool {
+    if !test_json_helpers() {
+        return false;
+    }
+    if !test_cli_parsing() {
+        return false;
+    }
+    if !test_mcp_frames() {
+        return false;
+    }
+    return true;
+}
